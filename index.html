@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AHIM Dashboard – Asset Health & Integrity Management</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/ahim.css">
+</head>
+<body>
+<header class="mast">
+  <div class="mast-in">
+    <div class="mast-top">
+      <h1>AHIM <span>Asset Health &amp; Integrity Management</span></h1>
+      <div class="controls">
+        <label>Period <select id="period" aria-label="Reporting month"></select></label>
+        <label class="btn">Open workbook<input type="file" id="fileIn" accept=".xlsx,.xlsm" hidden></label>
+        <button class="btn" id="printBtn" type="button">Print</button>
+      </div>
+    </div>
+    <div class="meta"><span id="site">Lotus Africa Uranium Plant</span> · <span id="asof"></span> · <span id="loadStatus" class="loadstatus">Starting…</span></div>
+    <div class="bar"><nav class="tabs" id="tabs" role="tablist"></nav><div class="areas" id="areas"></div></div>
+  </div>
+</header>
+<main>
+  <div id="warnings"></div>
+  <section id="page" aria-live="polite"></section>
+</main>
+<footer>Thresholds: vibration ISO 20816-3 zone limits; electrical IR ΔT per NETA MTS; thickness against minimum required wall (API 570 / 653 remaining-life method). Definitions: docs/kpi-definitions.md.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/calc.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/charts.js"></script>
+<script src="assets/js/pages/management.js"></script>
+<script src="assets/js/pages/risk.js"></script>
+<script src="assets/js/pages/strategy.js"></script>
+<script src="assets/js/pages/health.js"></script>
+<script src="assets/js/pages/reliability.js"></script>
+<script src="assets/js/pages/integrity.js"></script>
+<script src="assets/js/pages/fleet.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
