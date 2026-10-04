@@ -4,7 +4,7 @@ window.AHIM = window.AHIM || {};
 AHIM.config = {
   siteName: 'Lotus Africa Uranium Plant',
   unitName: 'Asset Health & Integrity Management',
-  dataUrl: 'data/AHIM_Data.xlsx',
+  dataUrl: 'AHIM_Data.xlsx',
   refreshMinutes: 5,            // re-read the workbook automatically while the page is open
   headerRow: 4,                 // row holding column headers on every data sheet
   currency: 'USD',
