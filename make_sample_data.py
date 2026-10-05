@@ -491,6 +491,11 @@ simple_sheet('Prestart','AHIM Prestart Compliance','Per month and vehicle/machin
 simple_sheet('Commentary','AHIM Monthly Analyst Commentary','One row per month: three short lines for management. Shown at the top of the Management page.',[('Month',10),('What changed',55),('Why',55),('What we are doing',55),('Author',22)],[('2026-09-01','AHI fell 6 points to 74. Four new Danger findings: drying tower pump bearing, MCC termination, acid line elbow below minimum wall, compactor brakes.','Late detection on two bad actors (P-101 repeat bearing failure; E-07 accelerated corrosion) and a backlog of 10 overdue recommendations.','36-hour stop requested for October to repair furnace refractory and E-07. Weekly CM / planner review started to clear the backlog.','RCM Specialist')],datecols=(1,),tab='2E8A57')
 for _c in 'BCD':
     for _r in range(5,40): wb['Commentary'][f'{_c}{_r}'].alignment=Alignment(wrap_text=True,vertical='top')
+import ahim_inputs as AI
+AS.write_input_sheets(wb, AI.demo_rows(assets, recs, [(d, TAG2NO[t], ty, ds, dn, wo, rc) for d, t, ty, ds, dn, wo, rc in ev], MON))
+for _r in range(5, 5 + len(assets)):
+    _v = AI.DEMO_ASSET_VALUES.get(AR.cell(_r, 2).value)
+    if _v: AR.cell(_r, 45, _v[0]); AR.cell(_r, 47, _v[1]); AR.cell(_r, 48, _v[2]); AR.cell(_r, 45).number_format = '#,##0'
 AS.add_register_validation(AR, 41, RN)
 AS.add_record_validation(RC, 32, RR)
 AS.write_reference(wb, OUT if 'OUT' in globals() else None)

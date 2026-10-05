@@ -2,12 +2,12 @@
 """Import the site CM Monthly Report workbook into the AHIM data workbook.
 
 Usage:  python scripts/import_cm_workbook.py CM_Monthly_Report.xlsx data/AHIM_Data.xlsx [Vessels_Tanks_Inspection_Summary.xlsx ...]
-Optional extra files: vessel & tank statutory inspection summaries (sheets 'Vessel Register' and 'Action Register') and the AHIM UT Register (UT_Tanks, UT_Readings, UT_Findings).
+Optional extra files: AHIM input workbooks (sheets Work_Orders, Production, Maint_Costs, Labour, RCA, Actions, KPI_Tree, Routes), vessel & tank statutory inspection summaries (sheets 'Vessel Register' and 'Action Register') and the AHIM UT Register (UT_Tanks, UT_Readings, UT_Findings).
 Re-run every month on the updated CM workbook. Conversion rules and assumptions are written to the Import_Review sheet.
 """
 import sys as _sys, os as _os
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-import ahim_reference as AR_REF, ahim_sheets as AS
+import ahim_reference as AR_REF, ahim_sheets as AS, ahim_inputs as AI
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -106,6 +106,13 @@ def _is_ut(path):
         from openpyxl import load_workbook as _l
         return 'UT_Readings' in _l(path, read_only=True).sheetnames
     except Exception: return False
+def _is_input(path):
+    try:
+        from openpyxl import load_workbook as _l
+        return bool(set(_l(path, read_only=True).sheetnames) & set(AI.SCHEMAS))
+    except Exception: return False
+INPUT_FILES = [f for f in VESSEL_FILES if _is_input(f) and not _is_ut(f)]
+VESSEL_FILES = [f for f in VESSEL_FILES if f not in INPUT_FILES]
 UT_FILES = [f for f in VESSEL_FILES if _is_ut(f)]
 VESSEL_FILES = [f for f in VESSEL_FILES if f not in UT_FILES]
 CAT2TECH = {'Thickness': 'Ultrasonic thickness', 'Structural': 'Structural', 'Foundation': 'Structural'}
@@ -244,7 +251,7 @@ AREA_LIST = sorted({a[3] for a in assets}) + [x for x in ['Acid plant', 'Power p
 TYPE_LIST = sorted(t for t in types if t) + [x for x in ['Tank', 'Pressure vessel', 'Piping', 'Structure', 'Boiler', 'Fired equipment', 'Electrical - transformer', 'Electrical - switchgear / MCC', 'Diesel generator', 'Light vehicle', 'Heavy equipment'] if x not in types]
 
 # ---- Records
-recs = []; n_off = n_nostat = n_untracked = n_est = 0
+recs = []; n_off = n_nostat = n_untracked = n_est = n_rec = 0
 ST = {'Ok':'OK', 'Alert':'Alert', 'Danger':'Danger'}
 alld = de.groupby('tag')['date'].apply(list).to_dict()
 for _, r in de.iterrows():
@@ -259,9 +266,14 @@ for _, r in de.iterrows():
     if insp != 'OK':
         if rs == 'Open': stage = 'WO raised' if (wo or wrs == 'Approved') else 'Raised'
         elif rs == 'Closed':
-            stage = 'Closed'; nxt = [x for x in alld[r['tag']] if x > r['date']]
-            closed = (nxt[0] if nxt else r['date']).strftime('%Y-%m-%d'); verified = 'Re-inspection'; n_est += 1
-            rem += ('; ' if rem else '') + ('Close date = next inspection (estimated)' if nxt else 'Close date not recorded')
+            stage = 'Closed'
+            dc_ = D(r.get('Date Closed')) if 'Date Closed' in de.columns else None
+            if dc_:   # recorded closure (CM workbook columns Date Closed / Verified By)
+                closed = dc_.strftime('%Y-%m-%d'); verified = S(r.get('Verified By')) or 'Not recorded'; n_rec += 1
+            else:
+                nxt = [x for x in alld[r['tag']] if x > r['date']]
+                closed = (nxt[0] if nxt else r['date']).strftime('%Y-%m-%d'); verified = 'Re-inspection'; n_est += 1
+                rem += ('; ' if rem else '') + ('Close date = next inspection (estimated)' if nxt else 'Close date not recorded')
         else:
             n_untracked += 1
             rem += ('; ' if rem else '') + f'Record status "{rs or "blank"}" in source: kept as a reading, not tracked'
@@ -345,6 +357,31 @@ for _, r in wo[wo['Work Type'].isin(['Breakdown', 'Corrective Maintenance']) & (
     dte = D(r['Actual Finish Date']) or D(r['Est. Start Date'])
     dn = r['Actual Down Time']; dn = float(dn) if not pd.isna(dn) else 0
     ev.append((dte.strftime('%Y-%m-%d'), t, 'Failure' if r['Work Type'] == 'Breakdown' else 'Repair', S(r['Work Description']), dn if r['Work Type'] == 'Breakdown' else 0, S(r['Work Order']), ''))
+# ---- Pronto WO export (WO Data) -> Work_Orders input (all work types; merged by WO no. on every import)
+def _wtype(t, scope):
+    t = (t or '').lower()
+    if 'prevent' in t or 'statut' in t: return 'Preventive'
+    if 'breakdown' in t: return 'Breakdown'
+    if 'emerg' in t: return 'Emergency'
+    if 'shutdown' in t: return 'Shutdown'
+    if any(k in t for k in ('project', 'improv', 'modif')): return 'Improvement'
+    if 'condition' in t or 'inspect' in t: return 'Condition-based'
+    return 'Corrective'
+_WST = {'complete': 'Complete', 'completed': 'Complete', 'in progress': 'In progress', 'planned': 'Scheduled', 'scheduled': 'Scheduled',
+        'released': 'Ready', 'forecast': 'Open', 'on hold': 'Open', 'open': 'Open', 'cancelled': 'Cancelled'}
+def _num(v):
+    v = pd.to_numeric(v, errors='coerce'); return None if pd.isna(v) else float(v)
+PRONTO_WO = []
+for _, r in wo.iterrows():
+    st = _WST.get(S(r.get('Status')).lower(), 'Open')
+    sched = D(r.get('Scheduled')) or D(r.get('Est. Start Date'))
+    PRONTO_WO.append([S(r['Work Order']), match(r['Plant Item']) or '', S(r.get('Work Description'))[:120], _wtype(S(r.get('Work Type')), S(r.get('Scope'))),
+                      S(r.get('Priority')), st, S(r.get('Responsibility')) or S(r.get('Section')), D(r.get('Est. Start Date')),
+                      D(r.get('Required')) or D(r.get('Latest')) or D(r.get('Est. Finish Date')), sched, D(r.get('Actual Finish Date')) or (D(r.get('Finish Date')) if st == 'Complete' else None),
+                      _num(r.get('Estimated Hours')), _num(r.get('Actual Hours')), _num(r.get('Actual Down Time')) or 0, S(r.get('Fault Code 1')) or S(r.get('Fault 1')),
+                      _num(r.get('Actual Cost')), '', '', ''])
+rv('Summary', 'Pronto work orders', f'{len(PRONTO_WO)} work orders mapped to Work_Orders ({sum(1 for x in PRONTO_WO if x[1])} linked to an asset). Raised date = Pronto Est. Start Date (no creation date in the export).')
+
 TECHMAP = {'Lubrication (Greasing)':'Lubrication / oil', 'Oil Change/Top-up':'Lubrication / oil', 'Oil Sampling/Analysis':'Lubrication / oil',
            'Tank/Vessel Inspection':'Tank & vessel', 'Statutory Inspection (Other)':'Statutory'}
 cm = wo[wo['Scope'].notna() & (wo['Status'] != 'Cancelled')].copy()
@@ -374,7 +411,7 @@ rv('Summary', 'Records created', f'{len(recs)} ({sum(1 for x in recs if x[3]=="V
 rv('Summary', 'Offline inspections excluded', f'{n_off} rows: equipment offline, no condition assessed')
 rv('Summary', 'Rows without status excluded', n_nostat + bad_dates)
 rv('Summary', 'Alert/Danger kept as readings only', f'{n_untracked} rows with record status blank or Observation (listed below). To track one, set its Record Status to Open in the CM workbook Data entry and re-import (Records are regenerated on each import).')
-rv('Summary', 'Closed dates estimated', f'{n_est} closed findings: source has no close date; next inspection date (or action deadline) used')
+rv('Summary', 'Closed dates', f'{n_rec} recorded in the CM workbook (Date Closed column); {n_est} estimated (next inspection date or action deadline) because Date Closed is blank')
 rv('Summary', 'Criticality conflicts', f'{len(conflicts)} assets where Data entry differs from the Criticality sheet (listed below)')
 rv('Summary', 'Pronto WO export', f'Months: {", ".join(wo_months)}. {len(ev)} breakdown/corrective WOs linked to assets, {um} could not be linked (plant item is a name, not a tag)')
 rv('Method', 'ACI factors', 'Safety, production, redundancy and repair cost set from site criticality (C1 = 5,5,4,4 · C2 = 3,4,3,2 · C3 = 2,2,2,1 · C4 = 1,1,1,1). Failure history from Alert/Danger findings in the last 12 months (0 = 1 … 6+ = 5). Refine in a criticality workshop.')
@@ -699,6 +736,9 @@ simple_sheet('Prestart','AHIM Prestart Compliance','Per month and vehicle/machin
  [('Month',10),('Pronto asset no.',14),('Shifts operated',12),('Prestarts completed',14)],OLD.get('Prestart',[]),datecols=(1,))
 
 
+_gen = {'Work_Orders': PRONTO_WO}
+if not AS.old_sheet_rows(OUT, 'KPI_Tree', 8): _gen['KPI_Tree'] = [list(x) for x in AI.KPI_TREE]
+AS.write_input_sheets(wb, _gen, OUT, INPUT_FILES, log=lambda n, m: rv('Inputs', n, m))
 REVIEW.sort(key=lambda x: {'Summary':0,'Method':1,'Not in source':2}.get(x[0],3))
 RVW=wb.create_sheet('Import_Review')
 RVW['A1']='AHIM Import Review'; RVW['A1'].font=font(bold=True,size=14,color=NAVY)

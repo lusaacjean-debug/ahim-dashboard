@@ -62,6 +62,15 @@
     if (certs.length) tiles.push([valid + '/' + certs.length, 'Statutory inspections in date', soon ? soon + ' due within ' + s.statWindow + ' days' : 'Target 100%', valid < certs.length ? 'r' : soon ? 'w' : 'g']); else missing.push('statutory certificates');
     if (roi != null) tiles.push([roi.toFixed(1) + ' : 1', 'CM return on investment (YTD)', 'Target ≥ ' + T.roi + ' : 1', U.rag(roi, T.roi, true, 0.5)]); else missing.push('CM value and programme cost');
     if (psp != null) tiles.push([psp + '%', 'Fleet prestart compliance', 'Target ≥ ' + T.prestart + '%', U.rag(psp, T.prestart)]); else if (all.some(a => a.area === AHIM.config.fleetArea)) missing.push('fleet prestarts');
+    if (m.kpiTree && m.kpiTree.length) {   // line of sight: strategic KPIs from the KPI tree
+      const V = AHIM.kpis.compute(ctx), F = (id, v, k) => v == null ? '–' : id === 'downtime_cost' ? U.money(v) : id === 'cm_roi' ? v + ' : 1' : /%/.test(k) ? v + '%' : v;
+      const strat = m.kpiTree.filter(k => k.tier === 'Strategic' && k.id !== 'ahi');
+      tiles.length = 0; missing.length = 0;
+      strat.forEach(k => { const v = V[k.id]; if (v == null) { missing.push(k.kpi.toLowerCase()); return; }
+        tiles.push([F(k.id, v, k.kpi), k.kpi, 'Target ' + (/lower/i.test(k.dir) ? '≤ ' : '≥ ') + F(k.id, k.target, k.kpi) + ' · ' + k.owner, AHIM.kpis.rag(k, v)]); });
+      tiles.push([critD, 'Critical assets in Danger', 'Target 0', critD ? 'r' : 'g']);
+      const fw = V.findings_wo; if (fw != null) tiles.push([fw + '%', 'Open findings with a work order', 'Target 100%', U.rag(fw, 100, true, 0.2)]);
+    }
     const kp = U.block('s8', 'Key performance indicators', U.fmtMonth(month) + ' against target',
       `<div class="mk-grid">${tiles.map(t => `<div class="mk ${t[3]}"><div class="v">${t[0]}</div><div class="l">${U.esc(t[1])}</div><div class="tg">${U.esc(t[2])}</div></div>`).join('')}</div>`);
 

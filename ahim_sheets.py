@@ -7,7 +7,7 @@ import ahim_reference as R
 NAVY = '203646'; thin = Side(style='thin', color='C9D3D9'); B = Border(left=thin, right=thin, top=thin, bottom=thin)
 def _f(**k): k.setdefault('name', 'Arial'); k.setdefault('size', 10); return Font(**k)
 
-REG_EXTRA = [('Strategy class', 26), ('Consequence (1-5)', 11), ('Service', 20), ('Bottleneck (Y/N)', 10), ('Replacement value (USD)', 13), ('Consequence basis', 46)]
+REG_EXTRA = [('Strategy class', 26), ('Consequence (1-5)', 11), ('Service', 20), ('Bottleneck (Y/N)', 10), ('Replacement value (USD)', 13), ('Consequence basis', 46), ('Install year', 9), ('Design life (years)', 9)]
 REC_EXTRA = [('Failure mode (ISO 14224)', 11), ('Failure mechanism (ISO 14224)', 12), ('Damage mechanism (API 571)', 26), ('Execution window', 14), ('Likelihood override (1-5)', 11)]
 WINDOWS = ['Online', 'Unit isolation', 'Plant shutdown']
 
@@ -23,7 +23,7 @@ def default_extras(a):
     base = max(f[0], f[1]); fl, why = R.consequence_floor(svc, strat)
     cons = max(base, fl)
     basis = (f'Default: service floor {fl} ({why})' if fl > base else f'Default: criticality factors (safety and environment {f[0]}, production {f[1]})')
-    return [strat, cons, svc, '', '', basis]
+    return [strat, cons, svc, '', '', basis, '', '']
 
 def merge_extras(a, old):
     """Defaults, overridden by the previous workbook. Consequence is kept only when its basis was set by a person
@@ -129,3 +129,78 @@ def mech_from_text(t):
                  ('lining', 'Lining failure'), ('corrosion', 'Atmospheric corrosion')]:
         if k in t: return v
     return ''
+
+
+# ---------------- professional inputs: Work_Orders, Production, Maint_Costs, Labour, RCA, Actions, KPI_Tree, Routes ----------------
+import datetime as _dt
+import ahim_inputs as AI
+
+def _norm(v):
+    if isinstance(v, (_dt.datetime, _dt.date)): return v.strftime('%Y-%m-%d')
+    return '' if v is None else str(v).strip()
+
+def _key(row, cols, key):
+    out = []
+    for k in key:
+        v = row[cols.index(k)]
+        if k == 'Month' and v not in (None, ''):
+            v = _norm(v)[:7] if not isinstance(v, str) or len(v) >= 7 else v
+        out.append(_norm(v))
+    return tuple(out)
+
+def read_input_files(paths):
+    """Rows from input workbooks (sheets named like the schemas, header in row 4, or row 1 if row 4 is not a header)."""
+    from openpyxl import load_workbook
+    got = {}
+    for p in paths:
+        wb = load_workbook(p, data_only=True, read_only=True)
+        for name in AI.SCHEMAS:
+            if name not in wb.sheetnames: continue
+            cols = [c for c, *_ in AI.SCHEMAS[name][2]]
+            allrows = list(wb[name].iter_rows(values_only=True))
+            hr = next((i for i, r in enumerate(allrows[:6]) if r and str(r[0] or '').strip() == cols[0]), None)
+            if hr is None: continue
+            hdr = [str(h).strip() if h is not None else '' for h in allrows[hr]]
+            for r in allrows[hr + 1:]:
+                if not r or r[0] in (None, ''): continue
+                got.setdefault(name, []).append([r[hdr.index(c)] if c in hdr and hdr.index(c) < len(r) else None for c in cols])
+    return got
+
+def write_input_sheets(wb, new_rows, old_path=None, input_files=(), log=None):
+    """Old rows (previous workbook) <- new rows (generated, e.g. from the Pronto export) <- input files; upsert by key."""
+    from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.utils import get_column_letter as L
+    extra = read_input_files(input_files) if input_files else {}
+    for name, (title, desc, colspec, key, owner, freq) in AI.SCHEMAS.items():
+        cols = [c for c, *_ in colspec]
+        merged = {}
+        for src, rows in (('previous', old_sheet_rows(old_path, name, len(cols), headers=cols) or []), ('generated', new_rows.get(name, [])), ('input', extra.get(name, []))):
+            n = 0
+            for r in rows:
+                r = list(r) + [None] * (len(cols) - len(r))
+                if r[0] in (None, ''): continue
+                k = _key(r, cols, key)
+                if src == 'generated' and k in merged and name == 'Work_Orders':
+                    old = merged[k]   # keep manual Ready / Needs shutdown / finding ref flags on Pronto rows
+                    for c in ('Ready (Y/N)', 'Needs shutdown (Y/N)', 'AHIM finding ref'):
+                        i = cols.index(c)
+                        if r[i] in (None, '') and old[i] not in (None, ''): r[i] = old[i]
+                merged[k] = r; n += 1
+            if log and src == 'input' and n: log(name, f'{n} rows merged from input workbook')
+        rows = list(merged.values())
+        di = [i for i, (_, _, kind, _) in enumerate(colspec) if kind == 'date']
+        for r in rows:
+            for i in di:
+                if isinstance(r[i], str) and len(r[i]) >= 10:
+                    try: r[i] = _dt.datetime.strptime(r[i][:10], '%Y-%m-%d')
+                    except ValueError: pass
+        ws = _sheet(wb, name, 'AHIM ' + title, f'{desc} Source: {owner}. Frequency: {freq}. Key: {" + ".join(key)}.',
+                    [(c, w) for c, w, *_ in colspec], rows, tab='C9A227', wrap=tuple(i + 1 for i, (c, w, k, l) in enumerate(colspec) if w >= 30))
+        for i, (c, w, kind, lst) in enumerate(colspec, 1):
+            col = L(i)
+            if kind == 'date':
+                for rr in range(5, 5 + len(rows)): ws[f'{col}{rr}'].number_format = 'dd-mmm-yy' if c != 'Month' else 'mmm-yy'
+            if kind == 'list':
+                d = DataValidation(type='list', formula1='"' + ','.join(AI.LISTS[lst]) + '"', allow_blank=True); ws.add_data_validation(d); d.add(f'{col}5:{col}{5 + len(rows) + 2000}')
+            if kind == 'num' and 'USD' in c:
+                for rr in range(5, 5 + len(rows)): ws[f'{col}{rr}'].number_format = '#,##0'

@@ -42,5 +42,22 @@
     }
     return s + '</svg>';
   }
-  AHIM.charts = { time };
+  /* Grouped monthly bars with an optional line (e.g. actual vs budget, PM vs schedule compliance).
+     o = {labels:[], series:[{values:[], color, name}], line:{values:[], name}, fmt:v=>string, h, yMax, target} */
+  function bars(o) {
+    const W = 680, H = o.h || 230, L = 54, R = 14, T = 16, B = 30, n = o.labels.length || 1;
+    const vals = o.series.flatMap(x => x.values).concat(o.line ? o.line.values : []).concat(o.target != null ? [o.target] : []).filter(v => v != null);
+    const max = o.yMax || Math.max(1, ...vals) * 1.12, gw = (W - L - R) / n, sc = o.series.length, bw = Math.min(24, (gw - 8) / sc);
+    const y = v => T + (1 - v / max) * (H - T - B), cx = i => L + gw * i + gw / 2, f = o.fmt || (v => Math.round(v));
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${o.label || 'bar chart'}">`;
+    for (let k = 0; k <= 4; k++) { const v = max * k / 4; s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--rule)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10.5" fill="var(--muted)">${f(v)}</text>`; }
+    o.series.forEach((ser, j) => ser.values.forEach((v, i) => { if (v == null) return; const x = cx(i) - (sc * bw) / 2 + j * bw;
+      s += `<rect x="${x}" y="${y(v)}" width="${bw - 2}" height="${Math.max(0, H - B - y(v))}" fill="${ser.color || 'var(--f3)'}"><title>${ser.name || ''} ${o.labels[i]}: ${f(v)}</title></rect>`; }));
+    if (o.target != null) s += `<line x1="${L}" x2="${W - R}" y1="${y(o.target)}" y2="${y(o.target)}" stroke="var(--ok)" stroke-dasharray="5 4"/><text x="${W - R - 4}" y="${y(o.target) - 4}" text-anchor="end" font-size="11" fill="var(--ok)" font-weight="600">Target ${f(o.target)}</text>`;
+    if (o.line) { const pts = o.line.values.map((v, i) => v == null ? null : [cx(i), y(v)]).filter(Boolean);
+      s += `<polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="var(--ink)" stroke-width="2"/>` + pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/>`).join(''); }
+    o.labels.forEach((l, i) => { s += `<text x="${cx(i)}" y="${H - 10}" text-anchor="middle" font-size="11" fill="var(--muted)">${l}</text>`; });
+    return s + '</svg>';
+  }
+  AHIM.charts = { time, bars };
 })();

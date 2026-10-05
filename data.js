@@ -78,7 +78,7 @@
       techs: techs.filter(t => str(r[t]).toUpperCase() === 'Y'),
       statReq: str(r['Statutory cert. required']).toUpperCase() === 'Y', certExpiry: toDate(r['Certificate expiry']),
       resp: str(r['Responsible']), strategy: str(r['Strategy class']), cons: num(r['Consequence (1-5)']), service: str(r['Service']),
-      bottleneck: str(r['Bottleneck (Y/N)']).toUpperCase() === 'Y', value: num(r['Replacement value (USD)']), consBasis: str(r['Consequence basis'])
+      bottleneck: str(r['Bottleneck (Y/N)']).toUpperCase() === 'Y', value: num(r['Replacement value (USD)']), consBasis: str(r['Consequence basis']), installYear: num(r['Install year']), life: num(r['Design life (years)'])
     })).filter(a => a.state !== 'Decommissioned');
     const rec = table(wb, S.records, 'Pronto asset no.');
     const records = rec.rows.map((r, i) => ({
@@ -115,11 +115,31 @@
     const ws_ = table(wb, 'WO_Summary', 'Work type');
     const woSummary = ws_.rows.map(r => ({ month: toDate(r['Month']), type: str(r['Work type']), total: num(r['Total']) || 0, done: num(r['Complete']) || 0, wip: num(r['In progress']) || 0, notStarted: num(r['Not started']) || 0 }))
       .map(x => { const d = new Date(x.month); x.month = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1); return x; });
+    const mStart = t => { if (t == null) return null; const d = new Date(t); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1); };
+    const yn = v => str(v).toUpperCase() === 'Y';
+    const wo = table(wb, 'Work_Orders', 'WO no.').rows.map(r => ({ wo: str(r['WO no.']), asset: str(r['Pronto asset no.']), desc: str(r['Description']), type: str(r['Work type']),
+      prio: str(r['Priority']), status: str(r['Status']), trade: str(r['Trade']) || 'Unassigned', raised: toDate(r['Raised']), req: toDate(r['Required by']), sched: toDate(r['Scheduled start']),
+      fin: toDate(r['Actual finish']), planH: num(r['Planned hours']) || 0, actH: num(r['Actual hours']), down: num(r['Downtime (h)']) || 0, fcode: str(r['Failure code']),
+      cost: num(r['Actual cost (USD)']), ready: yn(r['Ready (Y/N)']), shut: yn(r['Needs shutdown (Y/N)']), ref: str(r['AHIM finding ref']) }));
+    const production = table(wb, 'Production', 'Circuit').rows.map(r => ({ month: mStart(toDate(r['Month'])), circuit: str(r['Circuit']), unit: str(r['Production unit']),
+      planned: num(r['Planned hours']) || 0, operating: num(r['Operating hours']) || 0, mDown: num(r['Maintenance downtime (h)']) || 0, pDown: num(r['Process downtime (h)']) || 0,
+      oDown: num(r['Other downtime (h)']) || 0, prod: num(r['Production']) || 0, lost: num(r['Lost production value (USD)']) || 0 })).filter(x => x.month != null);
+    const costs = table(wb, 'Maint_Costs', 'Area').rows.map(r => ({ month: mStart(toDate(r['Month'])), area: str(r['Area']), cat: str(r['Category']), budget: num(r['Budget (USD)']) || 0, actual: num(r['Actual (USD)']) || 0 })).filter(x => x.month != null);
+    const labour = table(wb, 'Labour', 'Trade').rows.map(r => ({ month: mStart(toDate(r['Month'])), trade: str(r['Trade']), avail: num(r['Available hours']) || 0, worked: num(r['Worked hours']) || 0,
+      planned: num(r['Planned-work hours']) || 0, emerg: num(r['Emergency hours']) || 0, ot: num(r['Overtime hours']) || 0 })).filter(x => x.month != null);
+    const rca = table(wb, 'RCA', 'RCA no.').rows.map(r => ({ no: str(r['RCA no.']), asset: str(r['Pronto asset no.']), trigger: str(r['Trigger']), raised: toDate(r['Raised']), lead: str(r['Lead']),
+      problem: str(r['Problem']), cause: str(r['Root cause']), status: str(r['Status']) || 'Open', due: toDate(r['Due']), closed: toDate(r['Closed']), effective: str(r['Effective (Y/N)']).toUpperCase(), saving: num(r['Annual saving (USD)']) || 0 }));
+    const actions = table(wb, 'Actions', 'Action no.').rows.map(r => ({ no: str(r['Action no.']), source: str(r['Source']), ref: str(r['Reference']), action: str(r['Action']), owner: str(r['Owner']),
+      raised: toDate(r['Raised']), due: toDate(r['Due']), status: str(r['Status']) || 'Open', closed: toDate(r['Closed']), evidence: str(r['Evidence']) }));
+    const kpiTree = table(wb, 'KPI_Tree', 'KPI id').rows.map(r => ({ id: str(r['KPI id']), objective: str(r['Objective']), kpi: str(r['KPI']), tier: str(r['Tier']), owner: str(r['Owner']),
+      target: num(r['Target']), dir: str(r['Direction']) || 'Higher is better', freq: str(r['Frequency']) }));
+    const routes = table(wb, 'Routes', 'Route ID').rows.map(r => ({ id: str(r['Route ID']), name: str(r['Route']), area: str(r['Area']), tech: str(r['Technique']), person: str(r['Technician']),
+      interval: num(r['Interval (days)']) || 30, last: toDate(r['Last completed']), assets: str(r['Assets']).split(/[,;\s]+/).filter(Boolean) }));
     const cm = table(wb, S.commentary, 'Month');
     const commentary = cm.rows.map(r => ({ month: toDate(r['Month']), changed: str(r['What changed']), why: str(r['Why']), doing: str(r['What we are doing']), author: str(r['Author']) })).filter(c => c.month != null)
       .map(c => { const d = new Date(c.month); c.month = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1); return c; });
     [['events', ev], ['schedule', sc], ['value', va], ['cost', co], ['decisions', de], ['prestart', pr], ['commentary', cm]].forEach(([n, t]) => { if (t.missing) warn.push('Optional sheet "' + S[n] + '" not found: related panels stay empty.'); });
-    return { assets, records, events, schedule, value, cost, decisions, prestart, commentary, strategy, risk, woSummary, lists, techs, settings, warnings: warn };
+    return { assets, records, events, schedule, value, cost, decisions, prestart, commentary, strategy, risk, woSummary, wo, production, costs, labour, rca, actions, kpiTree, routes, lists, techs, settings, warnings: warn };
   }
 
   AHIM.data = {

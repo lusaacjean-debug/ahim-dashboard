@@ -1,0 +1,26 @@
+/* Actions & RCA (ISO 55001 cl. 9.3 and 10): action tracker, decisions, RCA pipeline, bad actors without RCA. */
+(function () {
+  const U = AHIM.ui, C = AHIM.calc, K = AHIM.kpis;
+  AHIM.pages.governance = function (ctx) {
+    const { m, D } = ctx;
+    const live = a => !/done|cancel/i.test(a.status), od = a => live(a) && a.due != null && a.due < D;
+    const A = m.actions, open = A.filter(live), late = A.filter(od), done30 = A.filter(a => /done/i.test(a.status) && a.closed != null && a.closed > D - 30 * C.DAY);
+    const rcaOpen = m.rca.filter(r => !/closed/i.test(r.status)), rcaClosed = m.rca.filter(r => /closed/i.test(r.status));
+    const ba = K.badActors(m, D), baNo = ba.filter(a => !m.rca.some(r => r.asset === a.id));
+    const tile = (v, l, t, r) => `<div class="mk ${r}"><div class="v">${v}</div><div class="l">${U.esc(l)}</div><div class="tg">${U.esc(t)}</div></div>`;
+    const tiles = `<div class="mk-grid">${tile(open.length, 'Open actions', `${done30.length} closed in the last 30 days`, '')}${tile(late.length, 'Overdue actions', 'Target 0', late.length ? 'r' : 'g')}
+      ${tile(rcaOpen.length, 'RCAs in progress', `${rcaClosed.length} closed`, '')}${tile(baNo.length, 'Bad actors without an RCA', `of ${ba.length} bad actors`, baNo.length ? 'r' : 'g')}
+      ${tile((U.pct(rcaClosed.filter(r => r.effective === 'Y').length, rcaClosed.length) ?? '–') + '%', 'Closed RCAs proven effective', 'Target 100%', '')}${tile(U.money(m.rca.reduce((t, r) => t + r.saving, 0)), 'Annual saving from RCAs', 'Recorded estimates', '')}</div>`;
+    const owners = {}; open.forEach(a => { const o = owners[a.owner] = owners[a.owner] || { n: 0, l: 0 }; o.n++; if (od(a)) o.l++; });
+    const aRow = a => `<tr><td class="b">${U.esc(a.no)}</td><td>${U.esc(a.action)}<div class="small">${U.esc(a.source)} · ${U.esc(a.ref)}</div></td><td>${U.esc(a.owner)}</td><td class="${od(a) ? 'late' : ''}">${U.fmt(a.due)}${od(a) ? '<div class="small late">overdue ' + Math.round((D - a.due) / C.DAY) + ' d</div>' : ''}</td><td>${U.esc(a.status)}</td></tr>`;
+    const STG = ['Open', 'Analysis', 'Actions in progress', 'Effectiveness check', 'Closed'];
+    const decs = m.decisions;
+    return `<div class="grid">${U.block('s12', 'Governance and improvement', 'Actions, decisions and root cause analysis: the evidence for ISO 55001 management review', tiles, 1)}
+      ${U.block('s5', 'Open actions by owner', 'Open / overdue', Object.keys(owners).length ? `<div class="scroll"><table class="tbl"><thead><tr><th>Owner</th><th class="r">Open</th><th class="r">Overdue</th></tr></thead><tbody>${Object.entries(owners).sort((a, b) => b[1].l - a[1].l || b[1].n - a[1].n).map(([k, o]) => `<tr><td>${U.esc(k)}</td><td class="r">${o.n}</td><td class="r ${o.l ? 'late' : ''}">${o.l}</td></tr>`).join('')}</tbody></table></div>` : U.empty('No open actions.'), 2)}
+      ${U.block('s7', 'Open actions', 'Earliest due first', open.length ? `<div class="scroll"><table class="tbl"><thead><tr><th>No.</th><th>Action</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>${open.sort((a, b) => (a.due || 9e15) - (b.due || 9e15)).map(aRow).join('')}</tbody></table></div>` : U.empty('No open actions.'), 3)}
+      ${U.block('s12', 'Root cause analysis', 'Pipeline and register', `<div class="stages" style="grid-template-columns:repeat(5,1fr)">${STG.map(g => `<div class="stage"><div class="v">${m.rca.filter(r => r.status === g).length}</div><div class="l">${g}</div></div>`).join('')}</div>
+        ${m.rca.length ? `<div class="scroll"><table class="tbl"><thead><tr><th>RCA</th><th>Asset</th><th>Problem and root cause</th><th>Lead</th><th>Status</th><th>Due</th><th>Effective</th></tr></thead><tbody>${m.rca.map(r => `<tr ${r.asset ? `data-asset="${U.esc(r.asset)}"` : ''}><td class="b">${U.esc(r.no)}<div class="small">${U.esc(r.trigger)}</div></td><td>${U.esc((m.byId[r.asset] || {}).tag || r.asset)}</td><td>${U.esc(r.problem)}<div class="small">${r.cause ? 'Root cause: ' + U.esc(r.cause) : '<span class="late">Root cause not yet found</span>'}</div></td><td>${U.esc(r.lead)}</td><td>${U.esc(r.status)}</td><td class="${!/closed/i.test(r.status) && r.due < D ? 'late' : ''}">${U.fmt(r.due)}</td><td>${r.effective === 'Y' ? '<span class="rag-g">Yes</span>' : r.effective === 'N' ? '<span class="late">No</span>' : '–'}</td></tr>`).join('')}</tbody></table></div>` : U.empty('No RCAs recorded.')}`, 4)}
+      ${U.block('s5', 'Bad actors without an RCA', 'Two or more failures in 12 months', baNo.length ? baNo.map(a => `<div class="ofr" data-asset="${U.esc(a.id)}"><b>${U.esc(a.tag)}</b> ${U.esc(a.name)} <span class="small">${C.reliability(a, D).failures} failures</span></div>`).join('') : U.empty('Every bad actor has an RCA.'), 5)}
+      ${U.block('s7', 'Management decisions', 'From the Decisions sheet', decs.length ? `<div class="scroll"><table class="tbl"><thead><tr><th>Decision</th><th>Owner</th><th>Raised</th><th>Status</th></tr></thead><tbody>${decs.map(d => `<tr><td>${U.esc(d.title)}</td><td>${U.esc(d.owner)}</td><td>${U.fmt(d.date)}</td><td class="${/open/i.test(d.status) ? 'rag-w' : 'rag-g'}">${U.esc(d.status)}</td></tr>`).join('')}</tbody></table></div>` : U.empty('No decisions recorded.'), 6)}</div>`;
+  };
+})();

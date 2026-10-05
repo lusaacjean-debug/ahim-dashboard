@@ -5,7 +5,8 @@ It reads one Excel workbook (`data/AHIM_Data.xlsx`) and turns every inspection i
 
 | Page | Audience | Shows |
 |---|---|---|
-| 1 · Management | Engineering Manager, site leadership | Commentary, Asset Health Index with data confidence, KPIs against target (risk, coverage, WOs, strategy, compliance), escalations, CM value |
+| **Strategic** | | |
+| Overview | Engineering Manager, site leadership | Commentary, Asset Health Index with data confidence, KPIs against target (risk, coverage, WOs, strategy, compliance), escalations, CM value |
 | 2 · Risk | Management, reliability | 5x5 heat map (ISO 31000), risk register with response and owner, risk by area |
 | 3 · Plant health | Reliability, maintenance planners | OK / Alert / Danger per asset and technique, criticality matrix, top 10 priorities |
 | 4 · Reliability | Reliability engineer | Asset Criticality Index, open record status, SMRP maintenance performance, ISO 14224 failure-mode Pareto, bad actors, machine history |
@@ -14,6 +15,15 @@ It reads one Excel workbook (`data/AHIM_Data.xlsx`) and turns every inspection i
 | 7 · Fleet | Fleet supervisor | Light vehicle and heavy equipment availability, tag-outs, prestart compliance, open defects |
 
 Inputs covered: vibration and visual routes, IR surveys, substation inspections, statutory inspections, ultrasonic reports (thickness and airborne), oil analysis, diesel generator checklists, LV/HV inspection checklists, LV/HV prestart checklists, and Pronto work-order history.
+
+## Pages (grouped by tier)
+* **Strategic:** Overview (commentary, AHI with data confidence, strategic KPIs from the KPI tree), Outcomes (availability and lost production by circuit), Finance (cost vs budget, cost/RAV, cost per unit, 5-year renewal forecast), Risk.
+* **Tactical:** Work management (PM and schedule compliance, planned vs emergency work, backlog crew-weeks, finding-to-WO time), Reliability, Strategy, Integrity, Plant health.
+* **Operational:** Field (routes due, printable route sheets, today's priorities, ready work), Fleet.
+* **Governance:** Actions & RCA (action tracker, RCA pipeline, bad actors without RCA, decisions), KPI tree (objectives → KPIs → owners → targets).
+* **Reports menu:** Monthly report, Risk register, Weekly CM pack, and **any page or set of pages** printed as an A4 pack (header, page numbers, confidentiality footer).
+
+Inputs: see `docs/input-standard.md`. Template: `python scripts/make_input_templates.py AHIM_Inputs.xlsx`.
 
 ## How it works
 

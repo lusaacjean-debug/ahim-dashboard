@@ -18,7 +18,7 @@
       <div class="controls">
         <label>Period <select id="period" aria-label="Reporting month"></select></label>
         <label class="btn">Open workbook<input type="file" id="fileIn" accept=".xlsx,.xlsm" hidden></label>
-        <button class="btn" id="printBtn" type="button">Print</button>
+        <button class="btn" id="repBtn" type="button">Reports</button>
       </div>
     </div>
     <div class="meta"><span id="site">Lotus Africa Uranium Plant</span> · <span id="asof"></span> · <span id="loadStatus" class="loadstatus">Starting…</span></div>
@@ -29,6 +29,28 @@
   <div id="warnings"></div>
   <section id="page" aria-live="polite"></section>
 </main>
+<dialog id="repDlg" aria-label="Reports">
+  <h3>Reports</h3>
+  <p class="small">A4, ready to print or save as PDF. Uses the period selected on the dashboard.</p>
+  <div class="rep-opts">
+    <label>Area <select id="repArea"></select></label>
+    <label>Week ending <input type="date" id="repWeek"></label>
+    <label class="chk"><input type="checkbox" id="repMedium"> Include Medium risks in the register</label>
+  </div>
+  <div class="rep-list">
+    <button type="button" data-report="monthly"><b>Monthly AHIM report</b><span>Management · commentary, KPIs, trend, decisions, highest risks, sign-off · A4 portrait</span></button>
+    <button type="button" data-report="risk"><b>Risk register</b><span>High and Extreme risks with response, acceptance authority and owner · Excel export · A4 landscape</span></button>
+    <button type="button" data-report="weekly"><b>Weekly CM &amp; planning pack</b><span>New findings, P1s, no WO, overdue, closed, actions agreed · Excel export · A4 landscape</span></button>
+  </div>
+  <h4 class="sub" style="margin-top:14px">Dashboard pages</h4>
+  <div class="rep-pages" id="repPages"></div>
+  <div class="rep-foot"><span><button type="button" id="repPrintPage">Current page</button> <button type="button" id="repPrintSel">Selected pages</button> <button type="button" class="lnk" id="repAll">select all</button></span><button type="button" id="repCancel">Cancel</button></div>
+</dialog>
+<div id="reportView" hidden>
+  <div class="rv-bar"><b>Report preview</b><span class="small">Page breaks, header and page numbers are applied when printing</span>
+    <span class="sp"></span><button type="button" id="repXlsx">Download Excel</button><button type="button" id="repPrint" class="pri">Print / Save as PDF</button><button type="button" id="repClose">Close</button></div>
+  <div id="repBody"></div>
+</div>
 <footer>Thresholds: vibration ISO 20816-3 zone limits; electrical IR ΔT per NETA MTS; thickness against minimum required wall (API 570 / 653 remaining-life method). Definitions: docs/kpi-definitions.md.</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -37,13 +59,21 @@
 <script src="calc.js"></script>
 <script src="ui.js"></script>
 <script src="charts.js"></script>
+<script src="kpis.js"></script>
 <script src="management.js"></script>
 <script src="risk.js"></script>
 <script src="strategy.js"></script>
+<script src="work.js"></script>
+<script src="outcomes.js"></script>
+<script src="finance.js"></script>
+<script src="field.js"></script>
+<script src="governance.js"></script>
+<script src="kpitree.js"></script>
 <script src="health.js"></script>
 <script src="reliability.js"></script>
 <script src="integrity.js"></script>
 <script src="fleet.js"></script>
+<script src="reports.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
